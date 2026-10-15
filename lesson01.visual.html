@@ -1,0 +1,82 @@
+<div id="agent-ft-first-lesson">
+  <style>
+    #agent-ft-first-lesson .ft-space { margin-top: 16px; }
+    #agent-ft-first-lesson pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--foreground); }
+    #agent-ft-first-lesson .ft-output { min-width: 0; }
+    #agent-ft-first-lesson .ft-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+    #agent-ft-first-lesson .ft-node { padding: 8px 0; color: var(--foreground); }
+    #agent-ft-first-lesson .ft-node[data-active="true"] { border-bottom: 2px solid var(--viz-series-1); }
+  </style>
+  <div class="viz-controls">
+    <label class="form-label" for="ft-case">教学案例
+      <select id="ft-case" class="form-select">
+        <option value="0">计算题</option>
+        <option value="1">缺少城市的天气查询</option>
+        <option value="2">概念问答</option>
+      </select>
+    </label>
+  </div>
+  <div class="ft-flow" aria-label="样本制作过程">
+    <span class="ft-node" data-stage="0">1 · 用户输入</span><span aria-hidden="true">→</span>
+    <span class="ft-node" data-stage="1">2 · 正确动作</span><span aria-hidden="true">→</span>
+    <span class="ft-node" data-stage="2">3 · 错误检查</span><span aria-hidden="true">→</span>
+    <span class="ft-node" data-stage="3">4 · 训练样本</span>
+  </div>
+  <div class="ft-output" aria-live="polite">
+    <h3 id="ft-heading">用户输入</h3>
+    <pre><code id="ft-content"></code></pre>
+    <div id="ft-detail" class="text-small"></div>
+  </div>
+  <div class="viz-row ft-space">
+    <button id="ft-prev" type="button" class="btn">上一步</button>
+    <span id="ft-position" class="tabular-nums"></span>
+    <button id="ft-next" type="button" class="btn btn-primary">下一步</button>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('agent-ft-first-lesson');
+  const select = root.querySelector('#ft-case');
+  const prev = root.querySelector('#ft-prev');
+  const next = root.querySelector('#ft-next');
+  const rules = '你是工具调用助手。计算题调用 calculate，参数 expression 为字符串。天气查询调用 get_weather，参数 city 为字符串；缺少城市时追问。概念问题直接回答。输出 JSON，action 只能是 tool、clarify、answer。tool 包含 name 和 arguments；clarify 和 answer 包含 content。';
+  const cases = [
+    {user:'帮我算一下 (128 + 64) / 3。', expected:{action:'tool',name:'calculate',arguments:{expression:'(128 + 64) / 3'}}, bad:{action:'tool',name:'get_weather',arguments:{city:'上海'}}, reason:'这是计算题，却选择了天气工具。', rule:'目标动作：calculate(expression)；计算由工具执行。'},
+    {user:'今天会下雨吗？',expected:{action:'clarify',content:'你想查询哪个城市的天气？'},bad:{action:'tool',name:'get_weather',arguments:{city:'北京'}},reason:'上下文没有城市信息，却自行填入北京。',rule:'目标动作：追问城市；上下文未提供位置。'},
+    {user:'什么是模型微调？',expected:{action:'answer',content:'模型微调是在已有模型基础上，用特定任务的数据继续训练，调整可训练参数。'},bad:{action:'tool',name:'calculate',arguments:{expression:'1 + 1'}},reason:'这是概念问题，调用计算器不能回答它。',rule:'目标动作：直接回答。'}
+  ];
+  const headings = ['用户输入','人工标注的正确动作','固定错误示范 · 未调用模型','SFT 消息样本 · 尚未训练'];
+  let state = {caseIndex:0,stage:0};
+  function restore(saved) {
+    const value = saved && saved.privateContent;
+    if(value && Number.isInteger(value.caseIndex) && value.caseIndex>=0 && value.caseIndex<3 && Number.isInteger(value.stage) && value.stage>=0 && value.stage<4) state={caseIndex:value.caseIndex,stage:value.stage};
+  }
+  function render() {
+    const c = cases[state.caseIndex];
+    select.value=String(state.caseIndex);
+    root.querySelector('#ft-heading').textContent=headings[state.stage];
+    let content='', detail='';
+    if(state.stage===0) {content=c.user; detail=c.rule;}
+    if(state.stage===1) {content=JSON.stringify(c.expected,null,2);detail='来源：人工标签；表示模型应该生成的动作。';}
+    if(state.stage===2) {content=JSON.stringify(c.bad,null,2);detail='结构检查：通过 · 动作检查：失败 · '+c.reason;}
+    if(state.stage===3) {
+      content=JSON.stringify({messages:[{role:'system',content:rules},{role:'user',content:c.user},{role:'assistant',content:JSON.stringify(c.expected)}]},null,2);
+      detail='system：规则 · user：输入 · assistant：正确输出';
+    }
+    root.querySelector('#ft-content').textContent=content;
+    root.querySelector('#ft-detail').textContent=detail;
+    root.querySelector('#ft-position').textContent=(state.stage+1)+' / 4';
+    root.querySelectorAll('[data-stage]').forEach(node=>node.dataset.active=String(Number(node.dataset.stage)===state.stage));
+    prev.disabled=state.stage===0; next.disabled=state.stage===3;
+  }
+  function save() {
+    if(window.openai && typeof window.openai.setWidgetState==='function') window.openai.setWidgetState({modelContent:{lesson:'训练数据入门',example:cases[state.caseIndex].user,step:headings[state.stage]},privateContent:state}).catch(()=>{});
+  }
+  select.addEventListener('change',()=>{state={caseIndex:Number(select.value),stage:0};render();save();});
+  prev.addEventListener('click',()=>{state.stage=Math.max(0,state.stage-1);render();save();});
+  next.addEventListener('click',()=>{state.stage=Math.min(3,state.stage+1);render();save();});
+  window.addEventListener('openai:set_globals',event=>{if(event.detail && event.detail.globals && event.detail.globals.widgetState){restore(event.detail.globals.widgetState);render();}});
+  restore(window.openai && window.openai.widgetState);
+  render();
+})();
+</script>

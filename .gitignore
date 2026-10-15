@@ -1,0 +1,32 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python environments and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Model weights, checkpoints and experiment output
+models/
+checkpoints/
+outputs/
+runs/
+wandb/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,26 @@
+{
+  "kind": "handcrafted_demonstration",
+  "model_called": false,
+  "training_run": false,
+  "sample_count": 3,
+  "checks": [
+    {
+      "id": "calculate",
+      "structure_ok": true,
+      "action_ok": false,
+      "reason": "这是计算题，却选择了天气工具。"
+    },
+    {
+      "id": "clarify",
+      "structure_ok": true,
+      "action_ok": false,
+      "reason": "上下文没有城市信息，却自行填入北京。"
+    },
+    {
+      "id": "answer",
+      "structure_ok": true,
+      "action_ok": false,
+      "reason": "这是概念问题，调用计算器不能回答它。"
+    }
+  ]
+}
